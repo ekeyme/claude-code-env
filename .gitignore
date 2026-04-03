@@ -1,0 +1,5 @@
+# 构建产物
+ccenv
+
+# Claude Code 工作目录
+.claude/
