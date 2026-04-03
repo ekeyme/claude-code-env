@@ -14,28 +14,37 @@ const (
 	appName      = "ccenv"
 	configFile   = "ccenv.config.json"
 	settingsFile = "settings.json"
+	homeEnvVar   = "CCENV_CLAUDE_HOME"
 )
 
-// 脱敏：敏感 key 的值保留前4个字符，其余替换为 ****
+var sensitiveWords = []string{"token", "key", "secret", "password", "credential", "private"}
+
 func maskValue(key, value string) string {
 	lower := strings.ToLower(key)
-	if strings.Contains(lower, "token") ||
-		strings.Contains(lower, "key") ||
-		strings.Contains(lower, "secret") ||
-		strings.Contains(lower, "password") ||
-		strings.Contains(lower, "credential") ||
-		strings.Contains(lower, "private") {
-		runes := []rune(value)
-		if len(runes) <= 4 {
-			return "****"
+	for _, w := range sensitiveWords {
+		if strings.Contains(lower, w) {
+			runes := []rune(value)
+			if len(runes) <= 4 {
+				return "****"
+			}
+			return string(runes[:4]) + "****"
 		}
-		return string(runes[:4]) + "****"
 	}
 	return value
 }
 
 // 获取 claude 配置目录
+// 优先使用 CCENV_CLAUDE_HOME 环境变量，否则使用 ~/.claude
 func claudeDir() (string, error) {
+	// 检查环境变量
+	if dir := os.Getenv(homeEnvVar); dir != "" {
+		if abs, err := filepath.Abs(dir); err == nil {
+			return abs, nil
+		}
+		// 转换路径失败则使用原始值
+		return dir, nil
+	}
+	// 默认使用 ~/.claude
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("无法获取 HOME 目录: %w", err)
@@ -55,37 +64,37 @@ func ensureClaudeDir() (string, error) {
 	return dir, nil
 }
 
-// 读取 settings.json，返回原始字节和解析后的 map
-func readSettings() (map[string]interface{}, []byte, error) {
+func readSettings() (map[string]interface{}, error) {
 	dir, err := claudeDir()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	path := filepath.Join(dir, settingsFile)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(map[string]interface{}), []byte("{}"), nil
+			return make(map[string]interface{}), nil
 		}
-		return nil, nil, fmt.Errorf("无法读取 %s: %w", path, err)
+		return nil, fmt.Errorf("无法读取 %s: %w", path, err)
 	}
 
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {
-		return make(map[string]interface{}), []byte("{}"), nil
+		return make(map[string]interface{}), nil
 	}
 
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, nil, fmt.Errorf("无法解析 %s: %w", path, err)
+		return nil, fmt.Errorf("无法解析 %s: %w", path, err)
 	}
-	return raw, data, nil
+	return raw, nil
 }
 
-// safeWriteFile 原子写入：先写系统临时文件，验证后再写入目标
+// safeWriteFile 原子写入：先写同目录临时文件，再 Rename 替换目标
 func safeWriteFile(path string, data []byte, perm os.FileMode) error {
-	tmp, err := os.CreateTemp("", "ccenv-")
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".ccenv-")
 	if err != nil {
 		return fmt.Errorf("无法创建临时文件: %w", err)
 	}
@@ -110,19 +119,15 @@ func safeWriteFile(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("关闭临时文件失败: %w", err)
 	}
 
-	// 验证临时文件内容
-	content, err := os.ReadFile(tmpPath)
-	if err != nil || !bytes.Equal(content, data) {
-		return fmt.Errorf("临时文件验证失败")
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return fmt.Errorf("设置临时文件权限失败: %w", err)
 	}
 
-	// 写入目标文件
-	if err := os.WriteFile(path, data, perm); err != nil {
+	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("无法写入 %s: %w", path, err)
 	}
 
 	ok = true
-	os.Remove(tmpPath)
 	return nil
 }
 
@@ -224,7 +229,7 @@ func printEnv(env map[string]string) {
 
 // cmdStatus 显示当前 settings.json 中的 env
 func cmdStatus() error {
-	raw, _, err := readSettings()
+	raw, err := readSettings()
 	if err != nil {
 		return err
 	}
@@ -239,7 +244,7 @@ func cmdSave(name string) error {
 	if name == "" {
 		return fmt.Errorf("请指定 profile 名称")
 	}
-	raw, _, err := readSettings()
+	raw, err := readSettings()
 	if err != nil {
 		return err
 	}
@@ -248,9 +253,6 @@ func cmdSave(name string) error {
 	profiles, err := readProfiles()
 	if err != nil {
 		return err
-	}
-	if profiles == nil {
-		profiles = make(map[string]map[string]string)
 	}
 	profiles[name] = env
 
@@ -275,7 +277,7 @@ func cmdUse(name string) error {
 		return fmt.Errorf("profile '%s' 不存在", name)
 	}
 
-	raw, _, err := readSettings()
+	raw, err := readSettings()
 	if err != nil {
 		return err
 	}
