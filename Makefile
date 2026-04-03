@@ -1,10 +1,22 @@
-.PHONY: build install uninstall clean
+.PHONY: build install uninstall clean help
 
 BINARY = ccenv
 INSTALL_DIR = $(HOME)/.local/bin
 
+# 版本信息（构建时注入）
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
+LDFLAGS := -X 'main.version=$(VERSION)' -X 'main.buildTime=$(BUILD_TIME)'
+
+help:
+	@echo "Make Targets:"
+	@echo "  build      - 构建 ccenv 二进制文件"
+	@echo "  install    - 构建并安装到 ~/.local/bin"
+	@echo "  uninstall  - 从 ~/.local/bin 卸载 ccenv"
+	@echo "  clean      - 清理构建产物"
+
 build:
-	go build -o $(BINARY) .
+	go build -ldflags "$(LDFLAGS)" -o $(BINARY) .
 
 install: build
 	@mkdir -p $(INSTALL_DIR)

@@ -17,6 +17,12 @@ const (
 	homeEnvVar   = "CCENV_CLAUDE_HOME"
 )
 
+// 通过 -ldflags 在构建时注入
+var (
+	version   = "dev"
+	buildTime = "unknown"
+)
+
 var sensitiveWords = []string{"token", "key", "secret", "password", "credential", "private"}
 
 func maskValue(key, value string) string {
@@ -392,7 +398,8 @@ func printUsage() {
   %s show <name>         显示 profile 详情
   %s delete <name>       删除某个 profile
   %s rename <old> <new>  重命名 profile
-`, appName, appName, appName, appName, appName, appName, appName, appName)
+  %s -v                  显示版本信息
+`, appName, appName, appName, appName, appName, appName, appName, appName, appName)
 }
 
 func main() {
@@ -419,6 +426,8 @@ func main() {
 		err = cmdDelete(getArg(2))
 	case "rename":
 		err = cmdRename(getArg(2), getArg(3))
+	case "-v", "--version":
+		fmt.Printf("%s %s (built %s)\n", appName, version, buildTime)
 	default:
 		fmt.Printf("未知命令: %s\n\n", cmd)
 		printUsage()

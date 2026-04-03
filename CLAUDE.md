@@ -31,6 +31,7 @@
 - `ccenv show <name>` - 显示 profile 详情
 - `ccenv delete <name>` - 删除某个 profile
 - `ccenv rename <old> <new>` - 重命名 profile
+- `ccenv -v` - 显示版本信息
 
 ## 测试
 

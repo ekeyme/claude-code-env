@@ -31,6 +31,7 @@ ccenv list                列出所有已保存的 profile
 ccenv show <name>         显示某个 profile 的详细内容
 ccenv delete <name>       删除某个 profile
 ccenv rename <old> <new>  重命名某个 profile
+ccenv -v                  显示版本信息
 ```
 
 ## 使用示例
