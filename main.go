@@ -12,8 +12,8 @@ import (
 
 const (
 	appName      = "ccenv"
-	configFile   = "ccenv.config.json"
 	settingsFile = "settings.json"
+	activateFile = "ccenv.activate"
 	homeEnvVar   = "CCENV_CLAUDE_HOME"
 )
 
@@ -39,18 +39,14 @@ func maskValue(key, value string) string {
 	return value
 }
 
-// 获取 claude 配置目录
-// 优先使用 CCENV_CLAUDE_HOME 环境变量，否则使用 ~/.claude
+// 获取 claude 配置目录（~/.claude 或 CCENV_CLAUDE_HOME）
 func claudeDir() (string, error) {
-	// 检查环境变量
 	if dir := os.Getenv(homeEnvVar); dir != "" {
 		if abs, err := filepath.Abs(dir); err == nil {
 			return abs, nil
 		}
-		// 转换路径失败则使用原始值
 		return dir, nil
 	}
-	// 默认使用 ~/.claude
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("无法获取 HOME 目录: %w", err)
@@ -58,7 +54,7 @@ func claudeDir() (string, error) {
 	return filepath.Join(home, ".claude"), nil
 }
 
-// 确保 claude 目录存在
+// 确保 ~/.claude 目录存在
 func ensureClaudeDir() (string, error) {
 	dir, err := claudeDir()
 	if err != nil {
@@ -70,29 +66,55 @@ func ensureClaudeDir() (string, error) {
 	return dir, nil
 }
 
+// ccenvDirPath 返回 profile 存储目录路径（~/.claude/ccenv/）
+func ccenvDirPath() (string, error) {
+	base, err := claudeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "ccenv"), nil
+}
+
+// ensureCcenvDir 确保 ~/.claude/ccenv/ 目录存在并返回路径
+func ensureCcenvDir() (string, error) {
+	dir, err := ccenvDirPath()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", fmt.Errorf("无法创建目录 %s: %w", dir, err)
+	}
+	return dir, nil
+}
+
+// profilePath 返回指定 profile 的文件路径
+func profilePath(name string) (string, error) {
+	dir, err := ccenvDirPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, name+".profile"), nil
+}
+
 func readSettings() (map[string]interface{}, error) {
 	dir, err := claudeDir()
 	if err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dir, settingsFile)
-
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Join(dir, settingsFile))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return make(map[string]interface{}), nil
 		}
-		return nil, fmt.Errorf("无法读取 %s: %w", path, err)
+		return nil, fmt.Errorf("无法读取 %s: %w", settingsFile, err)
 	}
-
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {
 		return make(map[string]interface{}), nil
 	}
-
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("无法解析 %s: %w", path, err)
+		return nil, fmt.Errorf("无法解析 %s: %w", settingsFile, err)
 	}
 	return raw, nil
 }
@@ -105,14 +127,12 @@ func safeWriteFile(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("无法创建临时文件: %w", err)
 	}
 	tmpPath := tmp.Name()
-
 	ok := false
 	defer func() {
 		if !ok {
 			os.Remove(tmpPath)
 		}
 	}()
-
 	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return fmt.Errorf("写入临时文件失败: %w", err)
@@ -124,37 +144,16 @@ func safeWriteFile(path string, data []byte, perm os.FileMode) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("关闭临时文件失败: %w", err)
 	}
-
 	if err := os.Chmod(tmpPath, perm); err != nil {
 		return fmt.Errorf("设置临时文件权限失败: %w", err)
 	}
-
 	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("无法写入 %s: %w", path, err)
 	}
-
 	ok = true
 	return nil
 }
 
-// 写入 settings.json，保留所有其他字段
-func writeSettings(raw map[string]interface{}) error {
-	dir, err := ensureClaudeDir()
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(dir, settingsFile)
-
-	data, err := json.MarshalIndent(raw, "", "  ")
-	if err != nil {
-		return fmt.Errorf("无法序列化 settings: %w", err)
-	}
-	data = append(data, '\n')
-
-	return safeWriteFile(path, data, 0600)
-}
-
-// 从 settings 中获取 env map
 func getEnvFromSettings(raw map[string]interface{}) map[string]string {
 	env := make(map[string]string)
 	if envRaw, ok := raw["env"]; ok {
@@ -171,49 +170,142 @@ func getEnvFromSettings(raw map[string]interface{}) map[string]string {
 	return env
 }
 
-// 读取 profile 配置
-func readProfiles() (map[string]map[string]string, error) {
-	dir, err := claudeDir()
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(dir, configFile)
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return make(map[string]map[string]string), nil
-		}
-		return nil, fmt.Errorf("无法读取 %s: %w", path, err)
-	}
-
-	data = bytes.TrimSpace(data)
-	if len(data) == 0 {
-		return make(map[string]map[string]string), nil
-	}
-
-	var profiles map[string]map[string]string
-	if err := json.Unmarshal(data, &profiles); err != nil {
-		return nil, fmt.Errorf("无法解析 %s: %w", path, err)
-	}
-	return profiles, nil
+// shellEscape 用单引号包裹值并转义内嵌单引号，保证 source 后还原为原始字符串
+func shellEscape(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// 写入 profile 配置
-func writeProfiles(profiles map[string]map[string]string) error {
-	dir, err := ensureClaudeDir()
+// shellUnescape 解码 shellEscape 产生的单引号格式，仅识别自身写入的格式。
+// 编码结构：外层单引号包裹，内嵌单引号编码为 '\''（共 4 字符：结束引号+反斜线+单引号+开始引号）。
+// 分割后：首段去掉前导 '，末段去掉尾随 '，各段以字面 ' 拼接。
+func shellUnescape(s string) (string, error) {
+	if len(s) < 2 || !strings.HasPrefix(s, "'") || !strings.HasSuffix(s, "'") {
+		return "", fmt.Errorf("格式错误：期望单引号包裹，got %q", s)
+	}
+	parts := strings.Split(s, `'\''`)
+	parts[0] = strings.TrimPrefix(parts[0], "'")
+	last := len(parts) - 1
+	parts[last] = strings.TrimSuffix(parts[last], "'")
+	return strings.Join(parts, "'"), nil
+}
+
+// writeProfile 将 env 写入 ~/.claude/ccenv/<name>.profile（权限 0600）
+func writeProfile(name string, env map[string]string) error {
+	dir, err := ensureCcenvDir()
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, configFile)
-
-	data, err := json.MarshalIndent(profiles, "", "  ")
-	if err != nil {
-		return fmt.Errorf("无法序列化 profiles: %w", err)
+	var buf strings.Builder
+	buf.WriteString("# ccenv profile: " + name + "\n")
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
 	}
-	data = append(data, '\n')
+	sort.Strings(keys)
+	for _, k := range keys {
+		buf.WriteString("export " + k + "=" + shellEscape(env[k]) + "\n")
+	}
+	return safeWriteFile(filepath.Join(dir, name+".profile"), []byte(buf.String()), 0600)
+}
 
-	return safeWriteFile(path, data, 0600)
+// parseProfileData 解析 profile 文件内容，仅识别 ccenv 写入的格式
+func parseProfileData(data []byte) (map[string]string, error) {
+	env := make(map[string]string)
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		rest, ok := strings.CutPrefix(line, "export ")
+		if !ok {
+			return nil, fmt.Errorf("格式错误行: %q（手动编辑自负其责）", line)
+		}
+		eq := strings.IndexByte(rest, '=')
+		if eq < 0 {
+			return nil, fmt.Errorf("格式错误行（缺少 =）: %q", line)
+		}
+		val, err := shellUnescape(rest[eq+1:])
+		if err != nil {
+			return nil, fmt.Errorf("无法解析值 %q: %w", line, err)
+		}
+		env[rest[:eq]] = val
+	}
+	return env, nil
+}
+
+// readProfile 读取并解析指定 profile 文件
+func readProfile(name string) (map[string]string, error) {
+	path, err := profilePath(name)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("profile '%s' 不存在", name)
+		}
+		return nil, fmt.Errorf("无法读取 profile '%s': %w", name, err)
+	}
+	return parseProfileData(data)
+}
+
+// listProfileNames 列出所有 profile 名称（按字母顺序）
+func listProfileNames() ([]string, error) {
+	dir, err := ccenvDirPath()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("无法读取 profile 目录: %w", err)
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".profile") {
+			names = append(names, strings.TrimSuffix(e.Name(), ".profile"))
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// setActiveProfile 原子更新 ccenv.activate 符号链接指向指定 profile
+func setActiveProfile(name string) error {
+	base, err := ensureClaudeDir()
+	if err != nil {
+		return err
+	}
+	target, err := profilePath(name)
+	if err != nil {
+		return err
+	}
+	link := filepath.Join(base, activateFile)
+	tmp := link + ".tmp"
+	os.Remove(tmp)
+	if err := os.Symlink(target, tmp); err != nil {
+		return fmt.Errorf("无法创建符号链接: %w", err)
+	}
+	if err := os.Rename(tmp, link); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("无法更新 %s: %w", activateFile, err)
+	}
+	return nil
+}
+
+// activeProfileName 读取 ccenv.activate 符号链接目标，返回 profile 名
+func activeProfileName() string {
+	base, err := claudeDir()
+	if err != nil {
+		return ""
+	}
+	target, err := os.Readlink(filepath.Join(base, activateFile))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(filepath.Base(target), ".profile")
 }
 
 // 打印 env 内容，自动脱敏
@@ -222,7 +314,6 @@ func printEnv(env map[string]string) {
 		fmt.Println("  (空)")
 		return
 	}
-	// 按 key 排序输出
 	keys := make([]string, 0, len(env))
 	for k := range env {
 		keys = append(keys, k)
@@ -233,19 +324,30 @@ func printEnv(env map[string]string) {
 	}
 }
 
-// cmdStatus 显示当前 settings.json 中的 env
 func cmdStatus() error {
 	raw, err := readSettings()
 	if err != nil {
 		return err
 	}
-	env := getEnvFromSettings(raw)
-	fmt.Println("当前 env:")
+	fmt.Println("settings.json 官方 env:")
+	printEnv(getEnvFromSettings(raw))
+
+	fmt.Println()
+	active := activeProfileName()
+	if active == "" {
+		fmt.Println("已激活 profile: (无)")
+		return nil
+	}
+	env, err := readProfile(active)
+	if err != nil {
+		fmt.Printf("已激活 profile: %s (无法读取: %v)\n", active, err)
+		return nil
+	}
+	fmt.Printf("已激活 profile: %s\n", active)
 	printEnv(env)
 	return nil
 }
 
-// cmdSave 将当前 env 保存为命名 profile
 func cmdSave(name string) error {
 	if name == "" {
 		return fmt.Errorf("请指定 profile 名称")
@@ -255,133 +357,115 @@ func cmdSave(name string) error {
 		return err
 	}
 	env := getEnvFromSettings(raw)
-
-	profiles, err := readProfiles()
-	if err != nil {
-		return err
-	}
-	profiles[name] = env
-
-	if err := writeProfiles(profiles); err != nil {
+	if err := writeProfile(name, env); err != nil {
 		return err
 	}
 	fmt.Printf("已保存 profile '%s' (%d 个变量)\n", name, len(env))
 	return nil
 }
 
-// cmdUse 应用某个 profile
 func cmdUse(name string) error {
 	if name == "" {
 		return fmt.Errorf("请指定 profile 名称")
 	}
-	profiles, err := readProfiles()
+	env, err := readProfile(name)
 	if err != nil {
 		return err
 	}
-	env, ok := profiles[name]
-	if !ok {
-		return fmt.Errorf("profile '%s' 不存在", name)
-	}
-
-	raw, err := readSettings()
-	if err != nil {
+	if err := setActiveProfile(name); err != nil {
 		return err
 	}
-
-	// 将 env 转为 map[string]interface{} 写入 settings
-	envIF := make(map[string]interface{})
-	for k, v := range env {
-		envIF[k] = v
-	}
-	raw["env"] = envIF
-
-	if err := writeSettings(raw); err != nil {
-		return err
-	}
-	fmt.Printf("已切换到 profile '%s' (%d 个变量)\n", name, len(env))
+	base, _ := claudeDir()
+	fmt.Printf("已激活 profile '%s' (%d 个变量)\n", name, len(env))
+	fmt.Printf("生效方式: source %s\n", filepath.Join(base, activateFile))
 	return nil
 }
 
-// cmdList 列出所有已保存的 profile
 func cmdList() error {
-	profiles, err := readProfiles()
+	names, err := listProfileNames()
 	if err != nil {
 		return err
 	}
-	if len(profiles) == 0 {
+	if len(names) == 0 {
 		fmt.Println("没有已保存的 profile")
 		return nil
 	}
+	active := activeProfileName()
 	fmt.Println("已保存的 profile:")
-	names := make([]string, 0, len(profiles))
-	for k := range profiles {
-		names = append(names, k)
-	}
-	sort.Strings(names)
 	for _, name := range names {
-		fmt.Printf("  %s (%d 个变量)\n", name, len(profiles[name]))
+		if name == active {
+			fmt.Printf("  %s (已激活)\n", name)
+		} else {
+			fmt.Printf("  %s\n", name)
+		}
 	}
 	return nil
 }
 
-// cmdShow 显示某个 profile 的详细内容
 func cmdShow(name string) error {
 	if name == "" {
 		return fmt.Errorf("请指定 profile 名称")
 	}
-	profiles, err := readProfiles()
+	env, err := readProfile(name)
 	if err != nil {
 		return err
-	}
-	env, ok := profiles[name]
-	if !ok {
-		return fmt.Errorf("profile '%s' 不存在", name)
 	}
 	fmt.Printf("profile '%s':\n", name)
 	printEnv(env)
 	return nil
 }
 
-// cmdDelete 删除某个 profile
 func cmdDelete(name string) error {
 	if name == "" {
 		return fmt.Errorf("请指定 profile 名称")
 	}
-	profiles, err := readProfiles()
+	path, err := profilePath(name)
 	if err != nil {
 		return err
 	}
-	if _, ok := profiles[name]; !ok {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("profile '%s' 不存在", name)
 	}
-	delete(profiles, name)
-	if err := writeProfiles(profiles); err != nil {
-		return err
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("无法删除 profile '%s': %w", name, err)
 	}
-	fmt.Printf("已删除 profile '%s'\n", name)
+	// 若删除的是当前激活 profile，移除悬空的符号链接
+	if activeProfileName() == name {
+		base, _ := claudeDir()
+		os.Remove(filepath.Join(base, activateFile))
+		fmt.Printf("已删除 profile '%s'（已取消激活）\n", name)
+	} else {
+		fmt.Printf("已删除 profile '%s'\n", name)
+	}
 	return nil
 }
 
-// cmdRename 重命名某个 profile
 func cmdRename(oldName, newName string) error {
 	if oldName == "" || newName == "" {
 		return fmt.Errorf("请指定旧名称和新名称")
 	}
-	profiles, err := readProfiles()
+	oldPath, err := profilePath(oldName)
 	if err != nil {
 		return err
 	}
-	env, ok := profiles[oldName]
-	if !ok {
+	newPath, err := profilePath(newName)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
 		return fmt.Errorf("profile '%s' 不存在", oldName)
 	}
-	if _, ok := profiles[newName]; ok {
+	if _, err := os.Stat(newPath); err == nil {
 		return fmt.Errorf("profile '%s' 已存在", newName)
 	}
-	profiles[newName] = env
-	delete(profiles, oldName)
-	if err := writeProfiles(profiles); err != nil {
-		return err
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("无法重命名: %w", err)
+	}
+	// 若重命名的是当前激活 profile，更新符号链接
+	if activeProfileName() == oldName {
+		if err := setActiveProfile(newName); err != nil {
+			fmt.Fprintf(os.Stderr, "警告: 无法更新 %s 符号链接: %v\n", activateFile, err)
+		}
 	}
 	fmt.Printf("已将 profile '%s' 重命名为 '%s'\n", oldName, newName)
 	return nil
@@ -391,14 +475,19 @@ func printUsage() {
 	fmt.Printf(`%s - Claude Code 环境变量管理工具
 
 用法:
-  %s status              显示当前 env
-  %s save <name>         保存当前 env 为 profile
-  %s use <name>          应用某个 profile
-  %s list                列出所有 profile
+  %s status              显示 settings.json 官方 env 与已激活 profile
+  %s save <name>         将 settings.json 当前 env 保存为 profile
+  %s use <name>          激活 profile（更新 ~/.claude/ccenv.activate 符号链接）
+  %s list                列出所有 profile（标注已激活）
   %s show <name>         显示 profile 详情
   %s delete <name>       删除某个 profile
   %s rename <old> <new>  重命名 profile
   %s -v                  显示版本信息
+
+Profile 存储: ~/.claude/ccenv/<name>.profile
+激活方式:
+  source ~/.claude/ccenv/<name>.profile    直接使用某个 profile
+  source ~/.claude/ccenv.activate          使用当前激活的 profile（符号链接）
 `, appName, appName, appName, appName, appName, appName, appName, appName, appName)
 }
 
@@ -440,7 +529,6 @@ func main() {
 	}
 }
 
-// getArg 安全获取命令行参数
 func getArg(index int) string {
 	if index < len(os.Args) {
 		return os.Args[index]
