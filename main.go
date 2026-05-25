@@ -308,6 +308,21 @@ func activeProfileName() string {
 	return strings.TrimSuffix(filepath.Base(target), ".profile")
 }
 
+// envWithPrefix 从当前进程环境变量中筛出指定前缀的键值对
+func envWithPrefix(prefix string) map[string]string {
+	env := make(map[string]string)
+	for _, kv := range os.Environ() {
+		eq := strings.IndexByte(kv, '=')
+		if eq < 0 {
+			continue
+		}
+		if key := kv[:eq]; strings.HasPrefix(key, prefix) {
+			env[key] = kv[eq+1:]
+		}
+	}
+	return env
+}
+
 // 打印 env 内容，自动脱敏
 func printEnv(env map[string]string) {
 	if len(env) == 0 {
@@ -336,15 +351,16 @@ func cmdStatus() error {
 	active := activeProfileName()
 	if active == "" {
 		fmt.Println("已激活 profile: (无)")
-		return nil
-	}
-	env, err := readProfile(active)
-	if err != nil {
+	} else if env, err := readProfile(active); err != nil {
 		fmt.Printf("已激活 profile: %s (无法读取: %v)\n", active, err)
-		return nil
+	} else {
+		fmt.Printf("已激活 profile: %s\n", active)
+		printEnv(env)
 	}
-	fmt.Printf("已激活 profile: %s\n", active)
-	printEnv(env)
+
+	fmt.Println()
+	fmt.Println("当前环境中的 ANTHROPIC_ 变量:")
+	printEnv(envWithPrefix("ANTHROPIC_"))
 	return nil
 }
 

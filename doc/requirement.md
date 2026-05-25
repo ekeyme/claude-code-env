@@ -34,6 +34,9 @@ ccenv 的核心价值：**切换只影响你选择的终端，其他终端不受
 **我希望** 一眼看清 settings.json 的官方配置和当前激活的是哪个 profile，
 **以便** 我不会在错误的供应商下执行操作。
 
+此外，status 还会列出**当前 shell 进程环境中**所有以 `ANTHROPIC_` 开头的变量及其取值，
+以便我确认当前终端里 Claude Code 相关环境的实际生效值，无需另跑 `env | grep ANTHROPIC_`。
+
 ### list — 查看所有 profile
 
 **作为** 有多个 profile 的开发者，

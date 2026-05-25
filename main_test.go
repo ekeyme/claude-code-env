@@ -141,6 +141,41 @@ func TestShellUnescape(t *testing.T) {
 	}
 }
 
+// TestEnvWithPrefix 测试按前缀筛选当前进程环境变量
+func TestEnvWithPrefix(t *testing.T) {
+	t.Run("只返回匹配前缀的变量", func(t *testing.T) {
+		t.Setenv("ANTHROPIC_FOO", "1")
+		t.Setenv("ANTHROPIC_BAR", "hello")
+		t.Setenv("NOT_ANTHROPIC", "skip")
+
+		got := envWithPrefix("ANTHROPIC_")
+		if got["ANTHROPIC_FOO"] != "1" {
+			t.Errorf("ANTHROPIC_FOO = %q, want %q", got["ANTHROPIC_FOO"], "1")
+		}
+		if got["ANTHROPIC_BAR"] != "hello" {
+			t.Errorf("ANTHROPIC_BAR = %q, want %q", got["ANTHROPIC_BAR"], "hello")
+		}
+		if _, ok := got["NOT_ANTHROPIC"]; ok {
+			t.Error("NOT_ANTHROPIC 不应被包含")
+		}
+	})
+
+	t.Run("值中含等号只按首个等号切分", func(t *testing.T) {
+		t.Setenv("ANTHROPIC_EQ", "a=b=c")
+		got := envWithPrefix("ANTHROPIC_")
+		if got["ANTHROPIC_EQ"] != "a=b=c" {
+			t.Errorf("ANTHROPIC_EQ = %q, want %q", got["ANTHROPIC_EQ"], "a=b=c")
+		}
+	})
+
+	t.Run("无匹配返回空 map", func(t *testing.T) {
+		got := envWithPrefix("DEFINITELY_NO_SUCH_PREFIX_")
+		if len(got) != 0 {
+			t.Errorf("expected empty, got %v", got)
+		}
+	})
+}
+
 // TestParseProfileData 测试 profile 文件解析
 func TestParseProfileData(t *testing.T) {
 	t.Run("正常解析", func(t *testing.T) {
