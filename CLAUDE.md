@@ -4,8 +4,8 @@
 
 ## 项目结构
 
-- `main.go` - 唯一源文件，包含所有逻辑
-- `main_test.go` - 单元测试
+- `cmd/ccenv/main.go` - 唯一源文件，包含所有逻辑
+- `cmd/ccenv/main_test.go` - 单元测试
 - `go.mod` - Go module 定义，零外部依赖
 - `Makefile` - 构建 / 安装 / 卸载
 - `scripts/ccenv-claude` - 按指定 profile 启动 claude 的脚本
@@ -42,10 +42,10 @@
 
 ```bash
 # 运行单元测试
-go test -v
+go test -v ./cmd/ccenv/...
 
 # 运行性能测试
-go test -bench=.
+go test -bench=. ./cmd/ccenv/...
 ```
 
 ## 约束

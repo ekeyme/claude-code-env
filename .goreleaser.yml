@@ -1,0 +1,50 @@
+version: 2
+
+builds:
+  - main: ./cmd/ccenv
+    binary: ccenv
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.buildTime={{.Date}}
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: >-
+      ccenv_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - src: scripts/ccenv-claude
+        strip_parent: true
+        info:
+          mode: 0755
+      - src: scripts/ccenv.deactivate
+        strip_parent: true
+      - src: scripts/vscode-claude-wrapper.sh
+        strip_parent: true
+        info:
+          mode: 0755
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

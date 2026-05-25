@@ -17,7 +17,7 @@ help:
 	@echo "  clean      - 清理构建产物"
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o $(BINARY) .
+	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/ccenv
 
 install: build
 	@mkdir -p $(INSTALL_DIR) $(CLAUDE_DIR)

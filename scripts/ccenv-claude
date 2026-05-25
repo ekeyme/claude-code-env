@@ -11,9 +11,10 @@ deactivate() {
 
 launch_with_profile() {
     local profile_file="$1"
+    shift
     deactivate
     . "$profile_file"
-    exec claude
+    exec claude "$@"
 }
 
 cmd_list() {
@@ -51,9 +52,10 @@ elif [[ "$1" == "list" ]]; then
     cmd_list
 else
     profile="$1"
+    shift
     if [[ ! -f "$CCENV_DIR/$profile.profile" ]]; then
         echo "profile '$profile' 不存在。使用 'ccenv list' 查看可用 profile。" >&2
         exit 1
     fi
-    launch_with_profile "$CCENV_DIR/$profile.profile"
+    launch_with_profile "$CCENV_DIR/$profile.profile" "$@"
 fi
