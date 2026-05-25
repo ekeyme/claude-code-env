@@ -48,6 +48,12 @@ go test -v ./cmd/ccenv/...
 go test -bench=. ./cmd/ccenv/...
 ```
 
+## Git 规范
+
+- Commit message 使用英文
+- Commit body 不超过 5 行
+- 不添加 Co-Authored-By 注释
+
 ## 约束
 
 - 纯 Go 标准库，零外部依赖

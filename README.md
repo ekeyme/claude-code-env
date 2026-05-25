@@ -1,48 +1,48 @@
 # ccenv
 
-[中文文档](README_zh.md)
+[English](README_en.md)
 
-A CLI tool for managing Claude Code environment variables via named profiles. Switch API providers per terminal without affecting other sessions.
+管理 Claude Code 环境变量的 CLI 工具。通过命名 profile 快速切换供应商，切换只影响当前终端，其他 session 不受影响。
 
-## Why ccenv?
+## 为什么需要 ccenv？
 
-Claude Code reads its configuration from `~/.claude/settings.json`. When you need to switch between providers (official API, proxy, self-hosted relay), editing `settings.json` takes effect globally — all running Claude Code sessions are affected, potentially interrupting active tasks.
+Claude Code 从 `~/.claude/settings.json` 读取配置。当你需要在不同供应商（官方 API、代理、自建中转）之间切换时，直接改 `settings.json` 会全局生效——所有正在运行的 Claude Code session 都会被影响，可能导致正在跑的任务中断。
 
-**ccenv makes switching scoped to a single terminal.** Other terminals keep their own environment untouched.
+**ccenv 让切换只影响你选择的终端。** 其他终端完全不受影响。
 
-## How It Works
+## 工作原理
 
 ```
-~/.claude/settings.json       # Claude Code config (ccenv reads env from here)
-~/.claude/ccenv/<name>.profile  # Stored profiles (shell-exportable files)
-~/.claude/ccenv.activate      # Symlink → currently active profile
+~/.claude/settings.json         # Claude Code 配置（ccenv 从这里读取 env）
+~/.claude/ccenv/<name>.profile  # 存储的 profile（可被 source 的 shell 脚本）
+~/.claude/ccenv.activate        # 符号链接 → 当前激活的 profile
 ```
 
-- `ccenv use <name>` creates a symlink at `~/.claude/ccenv.activate` pointing to the chosen profile
-- You `source` that symlink in your shell to load the environment variables
-- `settings.json` is never modified by `use` — only `save` reads from it
-- Each terminal independently `source`s whichever profile it needs
+- `ccenv use <name>` 创建符号链接 `~/.claude/ccenv.activate` 指向选定的 profile
+- 在 shell 中 `source` 这个符号链接即可加载环境变量
+- `use` 不会修改 `settings.json`——只有 `save` 会从中读取
+- 每个终端独立 `source` 自己需要的 profile
 
-## Installation
+## 安装
 
-### Option 1: Download from Releases (Recommended)
+### 方式一：下载预编译二进制（推荐）
 
-Go to [GitHub Releases](https://github.com/ekeyme/claude-code-env/releases) and download the archive for your platform.
+前往 [GitHub Releases](https://github.com/ekeyme/claude-code-env/releases) 下载对应平台的压缩包。
 
 ```bash
-# Example for Linux amd64
+# Linux amd64 示例
 tar xzf ccenv_*_linux_amd64.tar.gz
 mkdir -p ~/.local/bin
 cp ccenv ~/.local/bin/
 ```
 
-### Option 2: Go Install
+### 方式二：Go Install
 
 ```bash
 go install github.com/ekeyme/claude-code-env/cmd/ccenv@latest
 ```
 
-### Option 3: Build from Source
+### 方式三：从源码构建
 
 ```bash
 git clone https://github.com/ekeyme/claude-code-env.git
@@ -50,14 +50,14 @@ cd claude-code-env
 make install
 ```
 
-`make install` does the following:
-1. Builds the `ccenv` binary → `~/.local/bin/ccenv`
-2. Installs helper scripts:
-   - `~/.local/bin/ccenv-claude` — launch claude with a specific profile
-   - `~/.local/bin/vscode-claude-wrapper.sh` — VSCode Claude Code extension integration
-   - `~/.claude/ccenv.deactivate` — clear ANTHROPIC_ variables
+`make install` 会做以下事情：
+1. 构建二进制 → `~/.local/bin/ccenv`
+2. 安装辅助脚本：
+   - `~/.local/bin/ccenv-claude` — 按指定 profile 启动 claude
+   - `~/.local/bin/vscode-claude-wrapper.sh` — VSCode Claude Code 插件集成
+   - `~/.claude/ccenv.deactivate` — 清除 ANTHROPIC_ 环境变量
 
-> **Note:** If you downloaded a pre-built binary, you can find the helper scripts in the release archive. Install them manually if needed.
+> **注意：** 如果下载的是预编译二进制，辅助脚本在 release 压缩包中，需手动安装。
 
 ```bash
 cp ccenv ccenv-claude vscode-claude-wrapper.sh ~/.local/bin/
@@ -66,52 +66,51 @@ mkdir -p ~/.claude
 cp ccenv.deactivate ~/.claude/
 ```
 
-### Post-Install
+### 安装后配置
 
-Ensure `~/.local/bin` is in your `PATH`:
+确保 `~/.local/bin` 在 `PATH` 中：
 
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-## Quick Start
+## 快速开始
 
 ```bash
-# 1. Configure your provider in Claude Code first (edit ~/.claude/settings.json)
-#    Make sure the "env" field has your API credentials.
+# 1. 先在 Claude Code 中配置好供应商（编辑 ~/.claude/settings.json 的 env 字段）
 
-# 2. Save the current config as a named profile
+# 2. 保存当前配置为 profile
 ccenv save official
 
-# 3. Switch to another provider in settings.json, then save that too
+# 3. 切换到另一个供应商后，再保存一个
 ccenv save proxy
 
-# 4. Activate a profile in the current terminal
+# 4. 在当前终端激活某个 profile
 ccenv use proxy
 source ~/.claude/ccenv.activate
 
-# 5. Now this terminal uses "proxy", others are unaffected
+# 5. 这个终端使用 proxy，其他终端不受影响
 ```
 
-## Commands
+## 命令
 
 ```
-ccenv status              Show settings.json env, active profile, and shell ANTHROPIC_ variables
-ccenv save <name>         Save current settings.json env as a profile
-ccenv use <name>          Activate a profile (creates symlink)
-ccenv list                List all profiles (marks active one)
-ccenv show <name>         Display profile contents
-ccenv delete <name>       Delete a profile (deactivates if active)
-ccenv rename <old> <new>  Rename a profile (updates activation if active)
-ccenv -v                  Show version
+ccenv status              显示 settings.json env、已激活 profile、当前 shell ANTHROPIC_ 变量
+ccenv save <name>         将 settings.json 当前 env 保存为 profile
+ccenv use <name>          激活 profile（创建符号链接）
+ccenv list                列出所有 profile（标注已激活）
+ccenv show <name>         显示 profile 详情
+ccenv delete <name>       删除 profile（如果是当前激活的则自动取消激活）
+ccenv rename <old> <new>  重命名 profile（如果已激活则自动更新符号链接）
+ccenv -v                  显示版本信息
 ```
 
-### Command Examples
+### 命令示例
 
 ```bash
 $ ccenv status
-settings.json env:
+settings.json 官方 env:
   ANTHROPIC_AUTH_TOKEN=sk-a****
   ANTHROPIC_BASE_URL=https://api.anthropic.com
 
@@ -144,43 +143,43 @@ $ ccenv delete old-profile
 已删除 profile 'old-profile'
 ```
 
-## Usage Scenarios
+## 使用场景
 
-### 1. Switching Between Multiple Providers
+### 1. 多供应商切换
 
-You have official API access and a regional proxy. Save both as profiles and switch freely:
+同时有官方 API 和区域代理，保存为不同 profile 自由切换：
 
 ```bash
-ccenv save official    # Save official API credentials
-ccenv save proxy-cn    # Save proxy credentials
-ccenv use proxy-cn     # Activate proxy in this terminal
+ccenv save official    # 保存官方 API 凭据
+ccenv save proxy-cn    # 保存代理凭据
+ccenv use proxy-cn     # 在当前终端激活代理
 source ~/.claude/ccenv.activate
 ```
 
-### 2. Multiple Terminals, Different Providers Simultaneously
+### 2. 多终端同时使用不同供应商
 
-Terminal A is running a long task with the official API. You open Terminal B and switch to a different provider — Terminal A keeps running undisturbed:
+终端 A 正在用官方 API 跑一个长任务。你打开终端 B 切换到另一个供应商——终端 A 完全不受影响：
 
 ```bash
-# Terminal B
+# 终端 B
 ccenv use proxy
 source ~/.claude/ccenv.activate
 claude
 ```
 
-### 3. VSCode Integration
+### 3. VSCode 集成
 
-The VSCode Claude Code extension launches `claude` as a subprocess. Normally it inherits the system environment — which profile (if any) is active depends on what you last set in your terminal.
+VSCode Claude Code 插件会以子进程方式启动 `claude`。正常情况下它继承系统环境——至于用哪个 profile，取决于你在终端里最后激活的是哪个。
 
-**How it works:** `vscode-claude-wrapper.sh` replaces the `claude` binary path. Every time VSCode starts a Claude session, the wrapper:
+**工作原理：** `vscode-claude-wrapper.sh` 替代了 `claude` 二进制的路径。每次 VSCode 启动 Claude 会话时，wrapper 会：
 
-1. Clears existing `ANTHROPIC_` variables (via `ccenv.deactivate`)
-2. Sources `~/.claude/ccenv.activate` (the symlink pointing to your active profile)
-3. `exec claude "$@"` — launches the real `claude` with the profile's environment
+1. 清除已有的 `ANTHROPIC_` 变量（通过 `ccenv.deactivate`）
+2. Source `~/.claude/ccenv.activate`（指向当前激活 profile 的符号链接）
+3. `exec claude "$@"`——带着 profile 的环境变量启动真正的 `claude`
 
-**Switching profiles:** To change which provider VSCode uses, simply run `ccenv use <name>` in any terminal. This updates the `ccenv.activate` symlink. The next Claude session in VSCode will pick up the new profile automatically.
+**切换 profile：** 只需在任意终端运行 `ccenv use <name>`，这会更新 `ccenv.activate` 符号链接。VSCode 中下一次启动的 Claude 会话就会自动使用新 profile。
 
-Setup:
+配置方式：
 
 ```json
 {
@@ -188,56 +187,56 @@ Setup:
 }
 ```
 
-> **Note:** Already-running Claude sessions in VSCode keep their original environment. The new profile takes effect for sessions started *after* the switch.
+> **注意：** VSCode 中已在运行的 Claude 会话保持原有环境。新 profile 只对切换后启动的会话生效。
 
-### 4. Quick Launch with ccenv-claude
+### 4. 使用 ccenv-claude 快速启动
 
-`ccenv-claude` sources a profile and launches Claude in one step — no manual `source` needed.
+`ccenv-claude` 一步完成 source profile + 启动 claude，不需要手动 `source`。
 
-**How it works:** Same principle as the VSCode wrapper, but for terminal use. It deactivates any current `ANTHROPIC_` variables, sources the chosen profile file, then passes remaining arguments to `claude`.
+**工作原理：** 和 VSCode wrapper 相同的机制，但用于终端场景。先清除当前 `ANTHROPIC_` 变量，source 选定的 profile 文件，然后将其余参数传给 `claude`。
 
 ```bash
-# Use the currently active profile (reads ccenv.activate symlink)
+# 使用当前激活的 profile（读取 ccenv.activate 符号链接）
 ccenv-claude
 
-# Use a specific profile directly (ignores the active symlink)
+# 直接使用指定 profile（不受当前激活状态影响）
 ccenv-claude proxy-cn
 
-# Pass Claude arguments when using a specific profile
+# 使用指定 profile 时向 Claude 传递参数
 ccenv-claude proxy-cn --resume
 
-# Interactive selection from all saved profiles
+# 交互式选择 profile
 ccenv-claude list
 ```
 
-This is useful when you want to quickly spin up a Claude session with a specific provider without permanently changing your active profile.
+适合想临时用某个供应商快速启动 Claude、但不想改变当前激活 profile 的场景。
 
-### 5. Team Profile Sharing
+### 5. 团队共享 Profile
 
-Profile files are plain shell scripts. Share them with your team:
+Profile 文件就是普通的 shell 脚本，可以和团队共享：
 
 ```bash
-# Export a profile
+# 导出
 cp ~/.claude/ccenv/dev.profile ./shared/dev.profile
 
-# Import on another machine
+# 在其他机器上导入
 cp ./shared/dev.profile ~/.claude/ccenv/dev.profile
 ```
 
-## Security
+## 安全
 
-- **Auto-masking**: Values with keys containing `token`, `key`, `secret`, `password`, `credential`, or `private` are masked in `status` and `show` output (first 4 chars visible, rest replaced with `****`)
-- **File permissions**: Profile files are written with `0600`, directories with `0700`
-- **Atomic writes**: Files are written to a temp file first, then renamed — prevents data corruption on crash
+- **自动脱敏**：`status` 和 `show` 输出中，key 含 `token`/`key`/`secret`/`password`/`credential`/`private` 的变量值会自动脱敏（保留前 4 字符，其余替换为 `****`）
+- **文件权限**：profile 文件权限 `0600`，目录权限 `0700`
+- **原子写入**：先写临时文件再 rename，防止崩溃导致数据丢失
 
-## Deactivate
+## 取消激活
 
-To clear all `ANTHROPIC_` variables in the current shell:
+清除当前 shell 中所有 `ANTHROPIC_` 环境变量：
 
 ```bash
 source ~/.claude/ccenv.deactivate
 ```
 
-## License
+## 许可证
 
 [MIT](LICENSE)
