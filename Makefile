@@ -1,4 +1,5 @@
 .PHONY: build install uninstall clean help
+CLAUDE_DIR = $(HOME)/.claude
 
 BINARY = ccenv
 INSTALL_DIR = $(HOME)/.local/bin
@@ -19,15 +20,17 @@ build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) .
 
 install: build
-	@mkdir -p $(INSTALL_DIR)
+	@mkdir -p $(INSTALL_DIR) $(CLAUDE_DIR)
 	cp $(BINARY) $(INSTALL_DIR)/
+	cp scripts/ccenv.deactivate $(CLAUDE_DIR)/
+	cp scripts/ccenv-claude $(INSTALL_DIR)/ && chmod +x $(INSTALL_DIR)/ccenv-claude
+	cp scripts/vscode-claude-wrapper.sh $(INSTALL_DIR)/ && chmod +x $(INSTALL_DIR)/vscode-claude-wrapper.sh
 	@echo "已安装到 $(INSTALL_DIR)/$(BINARY)"
-	@echo "请确保 $(INSTALL_DIR) 在 PATH 中："
-	@echo "  echo 'export PATH=\"$(INSTALL_DIR):\$$PATH\"' >> ~/.bashrc && source ~/.bashrc"
 
 uninstall:
-	rm -f $(INSTALL_DIR)/$(BINARY)
-	@echo "已从 $(INSTALL_DIR) 卸载 $(BINARY)"
+	rm -f $(INSTALL_DIR)/$(BINARY) $(INSTALL_DIR)/ccenv-claude $(INSTALL_DIR)/vscode-claude-wrapper.sh
+	rm -f $(CLAUDE_DIR)/ccenv.deactivate
+	@echo "已卸载 $(BINARY)"
 
 clean:
 	rm -f $(BINARY)

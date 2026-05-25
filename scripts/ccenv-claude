@@ -1,0 +1,59 @@
+#!/bin/bash
+
+CLAUDE_DIR="${CCENV_CLAUDE_HOME:-$HOME/.claude}"
+CCENV_DIR="$CLAUDE_DIR/ccenv"
+
+deactivate() {
+    if [[ -f "$CLAUDE_DIR/ccenv.deactivate" ]]; then
+        . "$CLAUDE_DIR/ccenv.deactivate"
+    fi
+}
+
+launch_with_profile() {
+    local profile_file="$1"
+    deactivate
+    . "$profile_file"
+    exec claude
+}
+
+cmd_list() {
+    local profiles=()
+    for f in "$CCENV_DIR"/*.profile; do
+        [[ -f "$f" ]] && profiles+=("$(basename "$f" .profile)")
+    done
+
+    if [[ ${#profiles[@]} -eq 0 ]]; then
+        echo "没有可用的 profile。使用 'ccenv save <name>' 创建。" >&2
+        exit 1
+    fi
+
+    echo "可用的 profile:"
+    PS3="请选择 (q 退出): "
+    select name in "${profiles[@]}"; do
+        if [[ "$REPLY" == "q" || "$REPLY" == "Q" ]]; then
+            exit 0
+        elif [[ -n "$name" ]]; then
+            launch_with_profile "$CCENV_DIR/$name.profile"
+        else
+            echo "无效选择，请重试。" >&2
+        fi
+    done
+}
+
+if [[ $# -eq 0 ]]; then
+    if [[ ! -f "$CLAUDE_DIR/ccenv.activate" ]]; then
+        echo "没有已激活的 profile。使用 'ccenv use <name>' 激活。" >&2
+        exit 1
+    fi
+
+    launch_with_profile "$CLAUDE_DIR/ccenv.activate"
+elif [[ "$1" == "list" ]]; then
+    cmd_list
+else
+    profile="$1"
+    if [[ ! -f "$CCENV_DIR/$profile.profile" ]]; then
+        echo "profile '$profile' 不存在。使用 'ccenv list' 查看可用 profile。" >&2
+        exit 1
+    fi
+    launch_with_profile "$CCENV_DIR/$profile.profile"
+fi

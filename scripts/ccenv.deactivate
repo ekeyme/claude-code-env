@@ -1,0 +1,1 @@
+unset $(env  | grep ^ANTHROPIC_ | cut -d= -f1)

@@ -8,11 +8,16 @@
 - `main_test.go` - 单元测试
 - `go.mod` - Go module 定义，零外部依赖
 - `Makefile` - 构建 / 安装 / 卸载
+- `scripts/ccenv-claude` - 按指定 profile 启动 claude 的脚本
+- `scripts/ccenv.deactivate` - 清除 ANTHROPIC_ 环境变量
+- `scripts/vscode-claude-wrapper.sh` - VSCode Claude Code 插件用的 claude 启动包装脚本
 
 ## 数据文件
 
 - `~/.claude/settings.json` - 读写目标，仅操作 `env` 字段，其他字段原样保留
-- `~/.claude/ccenv.config.json` - Profile 存储，格式 `{ "profileName": { "KEY": "VALUE" } }`
+- `~/.claude/ccenv/<name>.profile` - Profile 存储，每个 profile 一个文件
+- `~/.claude/ccenv.activate` - 符号链接，指向当前激活的 profile 文件
+- `~/.claude/ccenv.deactivate` - 清除 ANTHROPIC_ 环境变量的脚本
 
 > **测试环境变量**: 可通过 `CCENV_CLAUDE_HOME` 环境变量指定自定义配置目录，用于测试时隔离环境。
 
@@ -48,3 +53,11 @@ go test -bench=.
 - 纯 Go 标准库，零外部依赖
 - 含 token/key/secret 的 key 自动脱敏（保留前4字符）
 - 文件权限：settings.json 写入 0600，目录创建 0700
+
+## 辅助脚本（make install 安装）
+
+- `ccenv-claude` — 按指定 profile 启动 claude
+  - `ccenv-claude` 使用当前 activated profile
+  - `ccenv-claude <profile>` 使用指定 profile
+  - `ccenv-claude list` 交互选择 profile
+- `vscode-claude-wrapper.sh` — VSCode Claude Code 插件配置此脚本为 claude 路径，自动继承 activated profile
